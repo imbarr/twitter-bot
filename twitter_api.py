@@ -1,38 +1,63 @@
-from urllib.parse import urljoin
-import urllib3
-from config import config
-import json
-import util
+from urllib.parse import urljoin, urlencode
+from requests_oauthlib import OAuth1Session, OAuth2Session
+import config
 
 
 class TwitterApi:
-    _stream_url = urljoin(config.twitter.url, '/2/tweets/search/stream/')
+    _url = config.get_config()["twitter"]["url"]
+    _cfg = config.get_config()["twitter"]
 
-    _auth_header = {'Authorization': f'Bearer {config.twitter.token}'}
+    def _get_oauth1_session(self):
+        return OAuth1Session(
+            client_key=self._cfg["api_key"],
+            client_secret=self._cfg["api_secret"],
+            resource_owner_key=self._cfg["access_token"],
+            resource_owner_secret=self._cfg["access_secret"]
+        )
 
-    _http = urllib3.PoolManager()
+    def _get_oauth2_session(self):
+        return OAuth2Session(
+            token={
+                'token_type': 'Bearer',
+                'access_token': self._cfg["bearer_token"]
+            }
+        )
 
-    def _retweet_url(self, tweetId):
-        return urljoin(config.twitter.url, f'/1.1/statuses/retweet/{tweetId}.json')
+    def _retweet_url(self, tweet_id):
+        return urljoin(self._url, f'/1.1/statuses/retweet/{tweet_id}.json')
 
-    def _stream_filter(self, user_ids):
-        filter_str = ' '.join([f'from:{user}' for user in user_ids])
-        return {'add': [{'value': filter_str}]}
+    def _fetch_url(self, since_time, since_id, users):
+        filters = ' '.join([f"from: {user}" for user in users])
+        query = {
+            'query': filters,
+            'tweet.fields': 'created_at',
+            'max_results': 100
+        }
+
+        if since_id is None:
+            time_str = since_time.isoformat()
+            query["start_time"] = time_str
+        else:
+            query["since_id"] = since_id
+        return urljoin(self._url, '/2/tweets/search/recent') + '?' + urlencode(query)
 
     def _check_if_success(self, response):
-        if response.status < 200 or response.status >= 300:
-            raise Exception(f'HTTP {response.status} response')
+        if not response.ok:
+            raise Exception(f'HTTP {response.status_code} response')
 
-    def stream(self, user_ids):
-        body = json.dumps(self._stream_filter(user_ids))
-        r = self._http.request('POST', self._stream_url, body=body, headers=self._auth_header)
+    def get_all_tweets_since(self, time, since_id, users):
+        r = self._get_oauth2_session().get(self._fetch_url(time, since_id, users))
         self._check_if_success(r)
-        for tweet in util.read_json_stream(r):
-            if not hasattr(tweet, "in_reply_to_status_id"):
-                # Dont forward replies
-                yield tweet
+        raw = r.json()
+        if "data" in raw:
+            # Ignoring responses
+            result = [item for item in raw["data"] if "in_reply_to_status_id" not in item]
+            result.reverse()
+            return result
+        else:
+            return []
 
-    def retweet(self, tweetId):
-        r = self._http.request('POST', self._retweet_url(tweetId), headers=self._auth_header)
+    def retweet(self, tweet_id):
+        r = self._get_oauth1_session().post(self._retweet_url(tweet_id))
         self._check_if_success(r)
-        return json.load(r)
+        return r.json()

@@ -1,0 +1,18 @@
+app:
+  name: "Twitter Bot"
+  retry_connect_seconds: 20 # Seconds to wait after connection error
+  fetch_interval_seconds: 15 # Tweets fetch interval (min 10 seconds)
+  log:
+    level: "INFO"
+twitter:
+  url: "https://api.twitter.com"
+  # Regenerate tokens at https://developer.twitter.com/en/portal
+  api_key: ""
+  api_secret: ""
+  bearer_token: ""
+  access_token: ""
+  access_secret: ""
+
+
+users: # User handlers or numeric ids
+  - AndreiM29152421

@@ -1,12 +1,16 @@
-import json
 import sys
-from types import SimpleNamespace
+import yaml
 
-config = None
+_config = None
 
-try:
-    with open('config/config.json', 'r') as file:
-        config = json.loads(file.read(), object_hook=lambda d: SimpleNamespace(**d))
-except EnvironmentError as err:
-    print(f'Error reading config file: {repr(err)}', file=sys.stderr)
-    sys.exit(1)
+
+def get_config():
+    global _config
+    if _config is None:
+        try:
+            with open('config/config.yaml', 'r') as file:
+                _config = yaml.load(file.read(), yaml.Loader)
+        except Exception as err:
+            print(f'Error reading config file: {repr(err)}', file=sys.stderr)
+            sys.exit(1)
+    return _config
